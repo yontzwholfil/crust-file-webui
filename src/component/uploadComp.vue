@@ -206,7 +206,7 @@ const showStatus = (task: Task): string => {
         <div class="nav-header">
             <div class="nav-left">
                 <a :class="{ active: selectedTab === 'transfer' }" @click="selectedTab = 'transfer'">
-                    传输 ({{ taskStore.taskMap.values.length }})
+                    传输 ({{ taskStore.taskMap.size }})
                 </a>
                 <a :class="{ active: selectedTab === 'success' }" @click="selectedTab = 'success'">
                     成功 ({{ taskStore.successTaskList.length }})
@@ -285,7 +285,7 @@ const showStatus = (task: Task): string => {
                                 </div>
                                 <span class="progress-text">{{
                                     task.upload.progress
-                                    }}</span>
+                                    }}%</span>
                             </div>
                         </td>
                         <td class="action-cell" v-show="selectedTab === 'failed'">
