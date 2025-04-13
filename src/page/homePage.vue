@@ -96,6 +96,7 @@ watch(
     async () => {
         updateCurrentStorageItem();
         updateCurrentPathItemList();
+        selectStorageItemList.value = []
     },
 );
 </script>

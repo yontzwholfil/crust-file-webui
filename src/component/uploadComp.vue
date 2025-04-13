@@ -77,6 +77,14 @@ const selectAllTask = () => {
         selectedTasks.value = taskStore.failedTaskList.map((item) => item.name);
     }
 };
+const selectTaskItem = (taskName: string) => {
+    const index = selectedTasks.value.indexOf(taskName);
+    if (index === -1) {
+        selectedTasks.value.push(taskName);
+    } else {
+        selectedTasks.value.splice(index, 1);
+    }
+};
 
 const retrySelectedTasks = async () => {
     for (const taskId of selectedTasks.value) {
@@ -261,7 +269,8 @@ const showStatus = (task: Task): string => {
                 <tbody>
                     <tr v-for="task in currentTasks" :key="task.id" class="file-row">
                         <td class="checkbox-cell" v-show="selectedTab === 'failed'">
-                            <input type="checkbox" :value="task.id" v-model="selectedTasks" />
+                            <input type="checkbox" :checked="selectedTasks.includes(task.name)"
+                                v-model="selectedTasks" />
                         </td>
                         <td class="name-cell">
                             <span class="filename">{{ task.name }}</span>

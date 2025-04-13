@@ -83,13 +83,14 @@ export const useSettingStore = defineStore(
       const pathItemList = folderPath
         .split("/")
         .filter((pathItem) => pathItem !== "");
+      console.log(pathItemList)
       let current = setting.value.storage;
       if (pathItemList.length === 0) {
         current.children.push(storageItem);
         current.size += storageItem.size;
         return true;
       }
-      for (let index = 0; index < pathItemList.length; index++) {
+      for (let index = 0; index < pathItemList.length - 1; index++) {
         const pathItem = pathItemList[index];
         const child = current.children.find((child) => child.name === pathItem);
         if (!child) {
