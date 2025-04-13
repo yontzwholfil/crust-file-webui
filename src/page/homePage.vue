@@ -1,112 +1,103 @@
 <script lang="ts" setup>
-import { useRoute } from 'vue-router';
-import { ref, watch, computed } from 'vue';
-import { useSettingStore } from '@/util/pinia';
-import type { FileItem, FolderItem, StorageItem } from '@/type/storage';
-import { AiOutlineClose, AiOutlineCloudDownload, AiOutlineCloudUpload, AiOutlineDelete, AiOutlineFile, AiOutlineFolder, AiOutlineSetting } from 'vue-icons-plus/ai';
-import { BiMove } from 'vue-icons-plus/bi';
-import deleteComp from '@/component/deleteComp.vue';
-import downloadComp from '@/component/downloadComp.vue';
-import moveComp from '@/component/moveComp.vue';
-import settingComp from '@/component/settingComp.vue';
-import uploadComp from '@/component/uploadComp.vue';
-import { downloadFile, formatSize, getFullPath } from '@/util';
+import { useRoute } from "vue-router";
+import { ref, watch, computed, onMounted } from "vue";
+import {
+    AiOutlineClose,
+    AiOutlineCloudDownload,
+    AiOutlineCloudUpload,
+    AiOutlineDelete,
+    AiOutlineFile,
+    AiOutlineFolder,
+    AiOutlineSetting,
+} from "vue-icons-plus/ai";
+import { BiMove } from "vue-icons-plus/bi";
+import deleteComp from "@/component/deleteComp.vue";
+import downloadComp from "@/component/downloadComp.vue";
+import moveComp from "@/component/moveComp.vue";
+import settingComp from "@/component/settingComp.vue";
+import uploadComp from "@/component/uploadComp.vue";
+import { downloadFile, formatSize, formatTimestamp, getFullPath } from "@/util";
+import { useSettingStore } from "@/store/setting";
+import type { FolderItem, StorageItem } from "@/type/setting";
 
+// 基础元素
 const route = useRoute();
-const settingStore = ref(useSettingStore());
+const settingStore = useSettingStore();
 
-// 响应式数据
-const selectedItems = ref<string[]>([]);
-const currentPath = ref(route.path);
-const currentContent = ref<{ type: 'file' | 'folder' | 'error'; content: StorageItem | StorageItem[] }>({
-    type: 'folder',
-    content: []
-});
-
-// 计算属性
-const allSelected = computed({
-    get: () => selectedItems.value.length === (currentContent.value.content as StorageItem[]).length
-        && (currentContent.value.content as StorageItem[]).length > 0,
-    set: (value) => {
-        selectedItems.value = value
-            ? (currentContent.value.content as StorageItem[]).map(item => item.name)
-            : [];
-    }
-});
-
-// 监听路径变化
-watch(() => route.path, (newPath) => {
-    currentPath.value = newPath;
-    updateContent();
-    updateTitle();
-});
-
-// 方法
-const updateTitle = () => {
-    const titleSegment = currentPath.value.split('/').filter(Boolean).pop() || 'home';
-    document.title = `${titleSegment} | Crust`;
+// 界面展示
+const currentStorageItem = ref<StorageItem | null>(null); // 当前界面
+const currentPathItemList = ref<{ name: string; path: string }[]>([]); // 当前路径
+const updateCurrentStorageItem = () => {
+    const path = decodeURIComponent(window.location.pathname);
+    const storageItem = settingStore.getStorageItem(path);
+    currentStorageItem.value = storageItem;
 };
+const updateCurrentPathItemList = () => {
+    const path = decodeURIComponent(window.location.pathname);
+    const segments = path.split("/").filter((item) => item !== "");
+    const crumbs = [{ name: "home", path: "/" }];
 
-const updateContent = () => {
-    try {
-        const result = settingStore.value.getContentItem(currentPath.value);
-
-        if (result === undefined) {
-            currentContent.value = { type: 'error', content: [] };
-            return
-        } else if (result.type === 'file') {
-            currentContent.value.type = 'file';
-            currentContent.value.content = result;
-        } else if (result.type === 'folder') {
-            currentContent.value.type = 'folder';
-            currentContent.value.content = (result as FolderItem).children;
-        }
-    } catch (error) {
-        // console.error('路径解析错误:', error);
-        currentContent.value = { type: 'error', content: [] };
-    }
-
-};
-
-const toggleSelection = (itemName: string) => {
-    selectedItems.value = selectedItems.value.includes(itemName)
-        ? selectedItems.value.filter(name => name !== itemName)
-        : [...selectedItems.value, itemName];
-};
-
-
-// 生成面包屑导航数据
-const breadcrumbs = computed(() => {
-    const segments = currentPath.value.split('/').filter(Boolean);
-    const crumbs = [{ name: 'Home', path: '/' }];
-
-    let accumulatedPath = '';
+    let accumulatedPath = "";
     for (const segment of segments) {
         accumulatedPath += `/${segment}`;
         crumbs.push({
             name: segment,
-            path: accumulatedPath
+            path: accumulatedPath,
         });
     }
-    return crumbs;
-});
+    currentPathItemList.value = crumbs;
+};
 
-const hasSelection = computed(() => selectedItems.value.length > 0);
+// 选择框
+const selectStorageItemList = ref<string[]>([]);
+const selectAllStorageItem = () => {
+    const selectLength = selectStorageItemList.value.length;
+    const totalLength = (currentStorageItem.value as FolderItem).children
+        .length;
+    if (selectLength === totalLength) {
+        selectStorageItemList.value = [];
+    } else {
+        selectStorageItemList.value = (
+            currentStorageItem.value as FolderItem
+        ).children.map((item) => item.name);
+    }
+};
+const selectStorageItem = (storageItemName: string) => {
+    const index = selectStorageItemList.value.indexOf(storageItemName);
+    if (index === -1) {
+        selectStorageItemList.value.push(storageItemName);
+    } else {
+        selectStorageItemList.value.splice(index, 1);
+    }
+};
 
-// 设置面板的显示
-const activePanel = ref<string | null>(null)
-const openPanel = (panel: string) => {
-    activePanel.value = panel
-}
-const closePanel = () => {
-    selectedItems.value = [];
-    activePanel.value = null
-}
+// 功能面板
+type functionType =
+    | "upload"
+    | "delete"
+    | "download"
+    | "move"
+    | "setting"
+    | null;
+const functionActive = ref<functionType>(null);
+const activeFunction = (choose: functionType) => {
+    functionActive.value = choose;
+};
 
 // 初始化
-updateTitle();
-updateContent();
+onMounted(async () => {
+    updateCurrentStorageItem();
+    updateCurrentPathItemList();
+});
 
+// 变量监听
+watch(
+    () => route.path,
+    async () => {
+        updateCurrentStorageItem();
+        updateCurrentPathItemList();
+    },
+);
 </script>
 
 <template>
@@ -115,102 +106,94 @@ updateContent();
         <header class="app-bar">
             <div class="path-display">
                 <router-link to="/">
-                    <img src="/src/public/favicon.ico" class="logo" alt="Logo">
+                    <img src="/src/asset/image/favicon.ico" class="logo" alt="Logo" />
                 </router-link>
                 <nav class="breadcrumb">
-                    <template v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
-                        <router-link :to="crumb.path" class="crumb-link"
-                            :class="{ 'last-crumb': index === breadcrumbs.length - 1 }">
+                    <template v-for="(crumb, index) in currentPathItemList" :key="crumb.path">
+                        <router-link :to="crumb.path" class="crumb-link" :class="{
+                            'last-crumb':
+                                index === currentPathItemList.length - 1,
+                        }">
                             {{ crumb.name }}
                         </router-link>
-                        <span v-if="index < breadcrumbs.length - 1" class="separator">/</span>
+                        <span v-if="index < currentPathItemList.length - 1" class="separator">/</span>
                     </template>
                 </nav>
             </div>
             <div class="right-group">
                 <div class="storage-actions">
-                    <button class="action-item" @click="openPanel('download')" :disabled="!hasSelection"
-                        aria-label="下载选中项目">
+                    <button class="action-item" @click="activeFunction('download')"
+                        :disabled="selectStorageItemList.length === 0" aria-label="下载选中项目">
                         <AiOutlineCloudDownload />
                         <span class="tooltip">下载</span>
                     </button>
 
-                    <button class="action-item" @click="openPanel('move')" :disabled="!hasSelection"
-                        aria-label="移动选中项目">
+                    <button class="action-item" @click="activeFunction('move')"
+                        :disabled="selectStorageItemList.length === 0" aria-label="移动选中项目">
                         <BiMove />
                         <span class="tooltip">移动</span>
                     </button>
 
-                    <button class="action-item" @click="openPanel('delete')" :disabled="!hasSelection"
-                        aria-label="删除选中项目">
+                    <button class="action-item" @click="activeFunction('delete')"
+                        :disabled="selectStorageItemList.length === 0" aria-label="删除选中项目">
                         <AiOutlineDelete />
                         <span class="tooltip">删除</span>
                     </button>
 
-                    <button class="action-item" @click="openPanel('upload')" aria-label="上传文件"
-                        v-show="currentContent.type !== 'file'">
+                    <button class="action-item" @click="activeFunction('upload')" aria-label="上传文件"
+                        v-show="currentStorageItem?.type !== 'file'">
                         <AiOutlineCloudUpload />
                         <span class="tooltip">上传</span>
                     </button>
 
-                    <button class="action-item" @click="openPanel('setting')" aria-label="设置">
+                    <button class="action-item" @click="activeFunction('setting')" aria-label="设置">
                         <AiOutlineSetting />
                         <span class="tooltip">设置</span>
                     </button>
                 </div>
 
                 <div class="search-box">
-                    <input type="text" placeholder="搜索文件..." class="search-input">
+                    <input type="text" placeholder="搜索文件..." class="search-input" />
                 </div>
             </div>
         </header>
 
-        <!-- 功能界面 -->
-        <div v-show="activePanel !== null" class="modal-mask" @click.self="closePanel">
-            <div class="userPanel">
-                <!-- 关闭按钮 -->
-                <button @click="closePanel" class="close-btn">
-                    <AiOutlineClose class="close-icon" />
-                </button>
-
-                <!-- 功能组件 -->
-                <component :is="downloadComp" v-show="activePanel === 'download'" :selectedItems="selectedItems"
-                    :closePanel="closePanel" />
-                <component :is="moveComp" v-show="activePanel === 'move'" :selectedItems="selectedItems"
-                    :closePanel="closePanel" />
-                <component :is="deleteComp" v-show="activePanel === 'delete'" :selectedItems="selectedItems"
-                    :closePanel="closePanel" />
-                <component :is="settingComp" v-show="activePanel === 'setting'" :updateContent="updateContent" />
-                <component :is="uploadComp" v-show="activePanel === 'upload'" />
-            </div>
-        </div>
-
-        <!-- 错误状态 -->
-        <div v-if="currentContent.type === 'error'" class="error-state">
-            <p>路径不存在或包含非法文件类型</p>
-        </div>
-
         <!-- 文件内容展示区 -->
         <main class="content-area">
+            <!-- 错误状态 -->
+            <div v-if="currentStorageItem === null" class="error-state">
+                <p>路径不存在或包含非法文件类型</p>
+            </div>
+
             <!-- 文件视图 -->
-            <section v-if="currentContent.type === 'file'" class="file-view">
+            <section v-else-if="currentStorageItem.type === 'file'" class="file-view">
                 <div class="file-meta">
-                    <h2>{{ (currentContent.content as FileItem).name }}</h2>
-                    <p>文件大小：{{ formatSize((currentContent.content as FileItem).size) }}</p>
-                    <p>创建时间：{{ (currentContent.content as FileItem).created }}</p>
+                    <h2>{{ currentStorageItem.name }}</h2>
+                    <p>文件大小：{{ formatSize(currentStorageItem.size) }}</p>
+                    <p>
+                        创建时间：{{
+                            formatTimestamp(currentStorageItem.created)
+                        }}
+                    </p>
                 </div>
-                <button class="download-btn"
-                    @click="downloadFile(`${settingStore.server.download.use}/ipfs/${(currentContent.content as FileItem).cid}`, (currentContent.content as FileItem).name)">
+                <button class="download-btn" @click="
+                    downloadFile(
+                        `https://${settingStore.setting.server.download.use}/ipfs/${currentStorageItem.cid}?filename=${encodeURIComponent(currentStorageItem.name)}`,
+                        currentStorageItem.name,
+                    )
+                    ">
                     下载文件
                 </button>
             </section>
 
             <!-- 文件夹视图 -->
-            <table v-else-if="currentContent.type === 'folder'" class="file-table">
+            <table v-else-if="currentStorageItem.type === 'folder'" class="file-table">
                 <thead>
                     <tr>
                         <th class="checkbox-cell">
-                            <input type="checkbox" v-model="allSelected">
+                            <input type="checkbox" :checked="currentStorageItem.children.length ===
+                                selectStorageItemList.length
+                                " @click="selectAllStorageItem()" />
                         </th>
                         <th class="name-header">名称</th>
                         <th class="size-header">大小</th>
@@ -218,10 +201,12 @@ updateContent();
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="item in (currentContent.content as StorageItem[])" :key="item.name" class="file-row">
+                    <tr v-for="item in currentStorageItem.children" :key="item.name" class="file-row" @click="
+                        $router.push(getFullPath(route.path, item.name))
+                        ">
                         <td class="checkbox-cell">
-                            <input type="checkbox" :checked="selectedItems.includes(item.name)"
-                                @change="toggleSelection(item.name)">
+                            <input type="checkbox" :checked="selectStorageItemList.includes(item.name)
+                                " @click.stop="selectStorageItem(item.name)" />
                         </td>
                         <td class="name-cell">
                             <div class="name-wrapper">
@@ -231,9 +216,9 @@ updateContent();
                                 <span class="folder-icon" v-if="item.type === 'folder'">
                                     <AiOutlineFolder />
                                 </span>
-                                <router-link class="item-link" :to="getFullPath(route.fullPath, item.name)">
+                                <span class="item-link">
                                     {{ item.name }}
-                                </router-link>
+                                </span>
                             </div>
                         </td>
                         <td class="size-cell">{{ formatSize(item.size) }}</td>
@@ -242,6 +227,25 @@ updateContent();
                 </tbody>
             </table>
         </main>
+
+        <!-- 功能界面 -->
+        <div v-show="functionActive !== null" class="modal-mask" @click.self="activeFunction(null)">
+            <!-- 关闭按钮 -->
+            <button @click.stop="activeFunction(null)" class="close-btn">
+                <AiOutlineClose class="close-icon" />
+            </button>
+
+            <!-- 功能组件 -->
+            <component :is="downloadComp" v-show="functionActive === 'download'" :selectedItems="selectStorageItemList"
+                :activeFunction="activeFunction" />
+            <component :is="moveComp" v-show="functionActive === 'move'" :selectedItems="selectStorageItemList"
+                :activeFunction="activeFunction" />
+            <component :is="deleteComp" v-show="functionActive === 'delete'" :selectedItems="selectStorageItemList"
+                :activeFunction="activeFunction" />
+            <component :is="settingComp" v-show="functionActive === 'setting'"
+                :updateCurrentStorageItem="updateCurrentStorageItem" />
+            <component :is="uploadComp" v-show="functionActive === 'upload'" />
+        </div>
     </div>
 </template>
 
@@ -308,7 +312,6 @@ updateContent();
     color: #a0aec0;
     font-size: 0.9rem;
 }
-
 
 /* 右侧组合布局 */
 .right-group {
@@ -377,7 +380,7 @@ updateContent();
         margin-top: 8px;
 
         &::after {
-            content: '';
+            content: "";
             position: absolute;
             bottom: 100%;
             left: 50%;
@@ -570,11 +573,7 @@ updateContent();
     color: #63b3ed;
     text-decoration: none;
     transition: color 0.2s;
-
-    &:hover {
-        color: #4299e1;
-        text-decoration: underline;
-    }
+    cursor: default;
 }
 
 .empty-state {

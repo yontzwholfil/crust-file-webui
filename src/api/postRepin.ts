@@ -1,51 +1,52 @@
+import { useSettingStore } from "@/store/setting";
+import { useTaskStore } from "@/store/task";
 import type { PinStatus } from "@/type/crust";
-import type { FileItem } from "@/type/storage";
-import { now } from "@/util";
+import type { FileItem } from "@/type/setting";
+import type { Task } from "@/type/task";
 import { axiosAuth } from "@/util/axios";
-import { useSettingStore, useTaskStore, type TaskItem } from "@/util/pinia";
 
 
-async function postRePin(task: TaskItem) {
-    const taskStore = useTaskStore();
-    const settingStore = useSettingStore();
-    taskStore.updateTaskPinStatus(task.id, "wait");
-    const res = task.upload.response;
-    if (res === null) {
-        alert(`${task.name}: 未能获取cid和name`);
-        return;
-    }
-    try {
-        let cid = res.Hash;
-        let name = res.Name;
-        taskStore.updateTaskPinStatus(task.id, "start");
-        const pinRes: PinStatus = await axiosAuth.post(`${settingStore.server.pin.use}/psa/pins`, {
-            cid: cid,
-            name: name,
-        });
-        taskStore.updateTaskPinResponse(task.id, pinRes);
-        taskStore.updateTaskPinStatus(task.id, "success");
+async function postRePin(task: Task) {
+  const taskStore = useTaskStore();
+  const settingStore = useSettingStore();
+  taskStore.updatePinStatus(task.id, "wait");
+  const res = task.upload.response;
+  if (res === null) {
+    alert(`${task.name}: 未能获取cid和name`);
+    return;
+  }
+  try {
+    let cid = res.Hash;
+    let name = res.Name;
+    taskStore.updatePinStatus(task.id, "start");
+    const pinRes: PinStatus = await axiosAuth.post(`https://${settingStore.setting.server.pin.use}/psa/pins`, {
+      cid: cid,
+      name: name,
+    });
+    taskStore.updatePinResponse(task.id, pinRes);
+    taskStore.updatePinStatus(task.id, "success");
 
-        const fullPath = `/${task.path}/${task.content.webkitRelativePath}`.replace(/\/+/g, '/');
-        const fileItem: FileItem = {
-            type: 'file',
-            name: task.content.name,
-            size: task.content.size,
-            created: now(),
-            cid: cid,
-            request_id: pinRes.requestId,
-        }
-        settingStore.addContentItem(fullPath, fileItem);
-    } catch {
-        taskStore.updateTaskPinStatus(task.id, "fail");
+    const fullPath = `/${task.path}/${task.content.webkitRelativePath}`.replace(/\/+/g, '/');
+    const fileItem: FileItem = {
+      type: 'file',
+      name: task.content.name,
+      size: task.content.size,
+      created: Date.now(),
+      cid: cid,
+      requestId: pinRes.requestId,
     }
-    if (task.pin.status === 'success' && task.upload.status === "success") {
-        taskStore.success_task_list.push(task);
-    } else {
-        taskStore.failure_task_list.push(task);
-    }
-    taskStore.task_map.delete(task.id);
+    settingStore.addStorageItem(fullPath, fileItem);
+  } catch {
+    taskStore.updatePinStatus(task.id, "error");
+  }
+  if (task.pin.status === 'success' && task.upload.status === "success") {
+    taskStore.successTaskList.push(task);
+  } else {
+    taskStore.failedTaskList.push(task);
+  }
+  taskStore.taskMap.delete(task.id);
 }
 
 export {
-    postRePin,
+  postRePin,
 }

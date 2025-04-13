@@ -1,43 +1,32 @@
 <script lang="ts" setup>
-import { ref, computed } from 'vue';
-import { taskFromFile, useTaskStore, type TaskItem } from '@/util/pinia';
-import { VscDebugRestart } from 'vue-icons-plus/vsc';
-import { IpDeleteFive } from 'vue-icons-plus/ip';
-import { postUploadContent } from '@/api/postUploadContent';
-import { postRePin } from '@/api/postRepin';
-import { formatSize } from '@/util';
+import { ref, computed } from "vue";
+import { VscDebugRestart } from "vue-icons-plus/vsc";
+import { IpDeleteFive } from "vue-icons-plus/ip";
+import { postUploadContent } from "@/api/postUploadContent";
+import { postRePin } from "@/api/postRepin";
+import { formatSize, taskFromFile } from "@/util";
+import { useTaskStore } from "@/store/task";
+import type { Task } from "@/type/task";
+import { useSettingStore } from "@/store/setting";
 
-const taskStore = useTaskStore();
-const selectedTab = ref<'transfer' | 'success' | 'failed'>('transfer');
+const selectedTab = ref<"transfer" | "success" | "failed">("transfer");
 const showPinTasks = ref(false);
 
 // 计算任务分类
-const transferringTasks = computed(() =>
-    Array.from(taskStore.task_map.values()).filter(t =>
-        !t.upload.response || !taskStore.failure_task_list.includes(t)
-    )
-);
-
-const successTasks = computed(() =>
-    taskStore.success_task_list.filter(t =>
-        showPinTasks.value ? t.pin.response : true
-    )
-);
-
-const failedTasks = computed(() =>
-    taskStore.failure_task_list.filter(t =>
-        showPinTasks.value ? t.pin.response : true
-    )
-);
-
+const taskStore = useTaskStore();
+const settingStore = useSettingStore();
 const currentTasks = computed(() => {
     switch (selectedTab.value) {
-        case 'transfer': return transferringTasks.value;
-        case 'success': return successTasks.value;
-        case 'failed': return failedTasks.value;
+        case "transfer":
+            return Array.from(taskStore.taskMap.values());
+        case "success":
+            return taskStore.successTaskList;
+        case "failed":
+            return taskStore.failedTaskList;
+        default:
+            return [];
     }
 });
-
 const showUploadOptions = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 const folderInput = ref<HTMLInputElement | null>(null);
@@ -56,12 +45,12 @@ const handleFileUpload = (event: Event) => {
     const path = document.location.pathname;
     if (files) {
         for (const file of files) {
-            const task: TaskItem = taskFromFile(path, file);
-            taskStore.task_map.set(task.id, task);
+            const task: Task = taskFromFile(path, file);
+            taskStore.taskMap.set(task.id, task);
             taskStore.pool.add(() => postUploadContent(task));
         }
     }
-    input.value = ''; // Clear input for same file selection
+    input.value = ""; // Clear input for same file selection
 };
 
 const handleFolderUpload = (event: Event) => {
@@ -70,115 +59,137 @@ const handleFolderUpload = (event: Event) => {
     const path = document.location.pathname;
     if (files) {
         for (const file of files) {
-            const task: TaskItem = taskFromFile(path, file);
-            taskStore.task_map.set(task.id, task);
+            const task: Task = taskFromFile(path, file);
+            taskStore.taskMap.set(task.id, task);
             taskStore.pool.add(() => postUploadContent(task));
         }
     }
-    input.value = ''; // Clear input for same folder selection
+    input.value = ""; // Clear input for same folder selection
 };
 
 const selectedTasks = ref<string[]>([]);
+const selectAllTask = () => {
+    const selectLength = selectedTasks.value.length;
+    const totalLength = taskStore.failedTaskList.length;
+    if (selectLength === totalLength) {
+        selectedTasks.value = [];
+    } else {
+        selectedTasks.value = taskStore.failedTaskList.map((item) => item.name);
+    }
+};
 
 const retrySelectedTasks = async () => {
     for (const taskId of selectedTasks.value) {
-        const task = taskStore.failure_task_list.find(t => t.id === taskId)
+        const task = taskStore.failedTaskList.find((t) => t.id === taskId);
         if (task) {
-            taskStore.failure_task_list = taskStore.failure_task_list.filter(t => t.id !== taskId);
-            taskStore.task_map.set(taskId, task);
-            if (task.upload.status === 'success') {
+            taskStore.failedTaskList = taskStore.failedTaskList.filter(
+                (t) => t.id !== taskId,
+            );
+            taskStore.taskMap.set(taskId, task);
+            if (task.upload.status === "success") {
                 await postRePin(task);
             } else {
                 task.upload = {
-                    status: 'wait',
-                    progress: '0',
-                    response: null
-                }
+                    status: "wait",
+                    progress: "0",
+                    response: null,
+                };
                 task.pin = {
-                    status: 'wait',
-                    response: null
-                }
+                    status: "wait",
+                    response: null,
+                };
                 taskStore.pool.add(() => postUploadContent(task));
             }
         }
     }
-    selectedTasks.value = []
-}
+    selectedTasks.value = [];
+};
 
 const retryTasks = async (taskId: string) => {
-    const task = taskStore.failure_task_list.find(t => t.id === taskId)
+    const task = taskStore.failedTaskList.find((t) => t.id === taskId);
     if (task) {
-        taskStore.failure_task_list = taskStore.failure_task_list.filter(t => t.id !== taskId);
-        taskStore.task_map.set(taskId, task);
-        if (task.upload.status === 'success') {
+        taskStore.failedTaskList = taskStore.failedTaskList.filter(
+            (t) => t.id !== taskId,
+        );
+        taskStore.taskMap.set(taskId, task);
+        if (task.upload.status === "success") {
             await postRePin(task);
         } else {
             task.upload = {
-                status: 'wait',
-                progress: '0',
-                response: null
-            }
+                status: "wait",
+                progress: "0",
+                response: null,
+            };
             task.pin = {
-                status: 'wait',
-                response: null
-            }
+                status: "wait",
+                response: null,
+            };
             taskStore.pool.add(() => postUploadContent(task));
         }
     }
-}
+};
 
 const delTask = (taskId: string) => {
-    taskStore.failure_task_list = taskStore.failure_task_list.filter(t => t.id !== taskId);
-}
-
-const isAllSelected = computed({
-    get: () => {
-        return failedTasks.value.length > 0 &&
-            failedTasks.value.every(t => selectedTasks.value.includes(t.id))
-    },
-    set: (value) => {
-        if (value) {
-            selectedTasks.value = failedTasks.value.map(t => t.id)
-        } else {
-            selectedTasks.value = []
-        }
-    }
-})
-
-const handleHeaderCheck = (event: Event) => {
-    const target = event.target as HTMLInputElement
-    isAllSelected.value = target.checked
-}
+    taskStore.failedTaskList = taskStore.failedTaskList.filter(
+        (t) => t.id !== taskId,
+    );
+};
 
 const clearAll = () => {
-    if (selectedTab.value === 'failed') {
-        taskStore.failure_task_list = [];
-    } else if (selectedTab.value === 'success') {
-        taskStore.success_task_list = [];
+    if (selectedTab.value === "failed") {
+        taskStore.failedTaskList = [];
+    } else if (selectedTab.value === "success") {
+        taskStore.successTaskList = [];
     }
     selectedTasks.value = [];
-}
+};
 
-const getTaskStatus = (task: TaskItem) => {
-    if (task.pin.status === 'success') {
-        return 'success'
-    } else if (task.upload.status === 'failed' || task.pin.status === 'failed') {
-        return 'failed'
-    } else if (task.upload.status === 'start' || task.pin.status === 'start') {
-        return 'doing'
+const getTaskStatus = (task: Task) => {
+    if (task.pin.status === "success") {
+        return "success";
+    } else if (task.upload.status === "error" || task.pin.status === "error") {
+        return "failed";
+    } else if (task.upload.status === "start" || task.pin.status === "start") {
+        return "doing";
     } else {
-        return 'wait'
+        return "wait";
     }
-}
+};
 
 const getStatusColor = (status: string) => {
     switch (status) {
-        case 'success': return '#48bb78';
-        case 'failed': return '#f56565';
-        case 'doing': return '#4299e1';
-        default: return '#a0aec0';
+        case "success":
+            return "#48bb78";
+        case "failed":
+            return "#f56565";
+        case "doing":
+            return "#4299e1";
+        default:
+            return "#a0aec0";
     }
-}
+};
+
+const showStatus = (task: Task): string => {
+    switch (task.upload.status) {
+        case "wait":
+            return "等待中";
+        case "error":
+            return "上传失败";
+        case "start":
+            return "上传中";
+        case "success":
+            switch (task.pin.status) {
+                case "start":
+                    return "固定中...";
+                case "success":
+                    return "成功";
+                case "error":
+                    return "固定失败";
+                case "wait":
+                    return "等待中";
+            }
+    }
+};
 </script>
 
 <template>
@@ -187,32 +198,30 @@ const getStatusColor = (status: string) => {
         <div class="nav-header">
             <div class="nav-left">
                 <a :class="{ active: selectedTab === 'transfer' }" @click="selectedTab = 'transfer'">
-                    传输 ({{ transferringTasks.length }})
+                    传输 ({{ taskStore.taskMap.values.length }})
                 </a>
                 <a :class="{ active: selectedTab === 'success' }" @click="selectedTab = 'success'">
-                    成功 ({{ successTasks.length }})
+                    成功 ({{ taskStore.successTaskList.length }})
                 </a>
                 <a :class="{ active: selectedTab === 'failed' }" @click="selectedTab = 'failed'">
-                    失败 ({{ failedTasks.length }})
+                    失败 ({{ taskStore.failedTaskList.length }})
                 </a>
             </div>
 
             <div class="nav-right">
                 <div v-show="selectedTab === 'transfer'" class="upload-container" @mouseenter="showUploadOptions = true"
                     @mouseleave="showUploadOptions = false">
-                    <button class="upload-main-btn">
-                        上传
-                    </button>
+                    <button class="upload-main-btn">上传</button>
                     <transition name="fade">
                         <div v-show="showUploadOptions" class="upload-options">
                             <button @click.stop="triggerFileUpload">
                                 <span>📄 文件</span>
-                                <input ref="fileInput" type="file" multiple hidden @change="handleFileUpload">
+                                <input ref="fileInput" type="file" multiple hidden @change="handleFileUpload" />
                             </button>
                             <button @click.stop="triggerFolderUpload">
                                 <span>📁 文件夹</span>
                                 <input ref="folderInput" type="file" webkitdirectory hidden
-                                    @change="handleFolderUpload">
+                                    @change="handleFolderUpload" />
                             </button>
                         </div>
                     </transition>
@@ -221,8 +230,8 @@ const getStatusColor = (status: string) => {
                     :disabled="selectedTasks.length === 0" class="action-btn">
                     重试选中
                 </button>
-                <button v-show="selectedTab === 'failed' || selectedTab === 'success'" @click="clearAll"
-                    :disabled="currentTasks.length === 0" class="action-btn danger">
+                <button v-show="selectedTab === 'failed' || selectedTab === 'success'
+                    " @click="clearAll" :disabled="currentTasks.length === 0" class="action-btn danger">
                     清空全部
                 </button>
             </div>
@@ -234,19 +243,25 @@ const getStatusColor = (status: string) => {
                 <thead>
                     <tr>
                         <th class="checkbox-cell" v-show="selectedTab === 'failed'">
-                            <input type="checkbox" v-model="isAllSelected" @change="handleHeaderCheck">
+                            <input type="checkbox" :checked="taskStore.failedTaskList.length ===
+                                selectedTasks.length
+                                " @change="selectAllTask" />
                         </th>
                         <th class="name-header">名称</th>
                         <th class="size-header">大小</th>
-                        <th class="progress-header" v-show="selectedTab === 'transfer'">进度</th>
-                        <th class="action-header" v-show="selectedTab === 'failed'">操作</th>
+                        <th class="progress-header" v-show="selectedTab === 'transfer'">
+                            进度
+                        </th>
+                        <th class="action-header" v-show="selectedTab === 'failed'">
+                            操作
+                        </th>
                         <th class="status-header">状态</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="task in currentTasks" :key="task.id" class="file-row">
                         <td class="checkbox-cell" v-show="selectedTab === 'failed'">
-                            <input type="checkbox" :value="task.id" v-model="selectedTasks">
+                            <input type="checkbox" :value="task.id" v-model="selectedTasks" />
                         </td>
                         <td class="name-cell">
                             <span class="filename">{{ task.name }}</span>
@@ -255,9 +270,13 @@ const getStatusColor = (status: string) => {
                         <td class="progress-cell" v-show="selectedTab === 'transfer'">
                             <div class="progress-wrapper">
                                 <div class="progress-container">
-                                    <div class="progress-bar" :style="{ width: task.upload.progress + '%' }"></div>
+                                    <div class="progress-bar" :style="{
+                                        width: task.upload.progress + '%',
+                                    }"></div>
                                 </div>
-                                <span class="progress-text">{{ task.upload.progress }}</span>
+                                <span class="progress-text">{{
+                                    task.upload.progress
+                                    }}</span>
                             </div>
                         </td>
                         <td class="action-cell" v-show="selectedTab === 'failed'">
@@ -269,9 +288,12 @@ const getStatusColor = (status: string) => {
                             </button>
                         </td>
                         <td class="status-cell">
-                            <span class="status-badge"
-                                :style="{ backgroundColor: getStatusColor(getTaskStatus(task)) }">
-                                {{ getTaskStatus(task) }}
+                            <span class="status-badge" :style="{
+                                backgroundColor: getStatusColor(
+                                    getTaskStatus(task),
+                                ),
+                            }">
+                                {{ showStatus(task) }}
                             </span>
                         </td>
                     </tr>
@@ -296,11 +318,12 @@ const getStatusColor = (status: string) => {
 
 <style scoped>
 .upload-comp-container {
-    height: 100%;
+    width: 80%;
+    height: 80%;
     overflow-y: auto;
     background: #1a202c;
     color: #e5e7eb;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .nav-header {
@@ -380,7 +403,9 @@ const getStatusColor = (status: string) => {
     background: #2d3748;
     border-radius: 0.5rem;
     padding: 0.5rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06);
     min-width: 120px;
     z-index: 20;
 }
@@ -405,7 +430,9 @@ const getStatusColor = (status: string) => {
 
 .fade-enter-active,
 .fade-leave-active {
-    transition: opacity 0.15s, transform 0.15s;
+    transition:
+        opacity 0.15s,
+        transform 0.15s;
 }
 
 .fade-enter-from,

@@ -1,14 +1,20 @@
 <script lang="ts" setup>
 import { ref, computed, onMounted } from 'vue';
-import { useSettingStore } from '@/util/pinia';
 import { getFullPath } from '@/util';
 import { AiOutlineFolder, AiOutlineArrowRight } from 'vue-icons-plus/ai';
-import type { StorageItem } from '@/type/storage';
+import { useSettingStore } from '@/store/setting';
 
 const settingStore = useSettingStore();
+type functionType =
+    | "upload"
+    | "delete"
+    | "download"
+    | "move"
+    | "setting"
+    | null;
 const props = defineProps<{
     selectedItems: string[];
-    closePanel: () => void;
+    activeFunction: (choose: functionType) => void;
 }>();
 
 // 当前路径和选中的项目
@@ -23,13 +29,13 @@ const navigationHistory = ref<string[]>([]);
 
 // 获取当前目录内容
 const currentContent = computed(() => {
-    const content = settingStore.getContentItem(currentPath.value);
+    const content = settingStore.getStorageItem(currentPath.value);
     return content?.type === 'folder' ? content.children : [];
 });
 
 // 只显示文件夹（用于移动目标选择）
 const foldersOnly = computed(() =>
-    (currentContent.value as StorageItem[]).filter(item => item.type === 'folder')
+    currentContent.value.filter(item => item.type === 'folder')
 );
 
 // 导航到指定路径
@@ -65,10 +71,10 @@ const confirmMove = () => {
     selectedItemsFullPath.value.forEach(fullPath => {
         const newPath = `${targetPath.value}/${fullPath.split('/').pop()}`;
 
-        settingStore.moveContentItem(fullPath, newPath);
+        settingStore.moveStorageItem(fullPath, newPath);
     });
 
-    props.closePanel();
+    props.activeFunction(null);
 };
 
 // 初始化当前路径
@@ -115,7 +121,7 @@ onMounted(() => {
         </div>
 
         <div class="move-actions">
-            <button class="cancel-btn" @click="closePanel">取消</button>
+            <button class="cancel-btn" @click="activeFunction(null)">取消</button>
             <button class="confirm-btn" @click="confirmMove" :disabled="!targetPath">
                 确认移动
             </button>

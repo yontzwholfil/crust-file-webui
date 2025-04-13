@@ -1,66 +1,36 @@
 <script lang="ts" setup>
-import { now } from '@/util';
-import { notyf } from '@/util/notify';
-import { useSettingStore } from '@/util/pinia';
-import { ref } from 'vue';
-import { BiExport, BiImport, BiTrash } from 'vue-icons-plus/bi';
+import { AiOutlineDelete, AiOutlinePlus } from "vue-icons-plus/ai";
+
+import { useSettingStore } from "@/store/setting";
+import { ref } from "vue";
+
+const props = defineProps<{
+    updateCurrentStorageItem: () => void;
+}>();
 
 const settingStore = useSettingStore();
-const props = defineProps<{
-    updateContent: () => void;
-}>();
-const tokenInput = ref('');
-const seedInput = ref('');
-const newUrl = ref({
-    upload: '',
-    download: '',
-    pin: ''
-});
 
-// 用户设置
-const setToken = () => {
-    if (tokenInput.value) {
-        settingStore.user.token = tokenInput.value;
-        notyf.success("Token 设置成功");
-    }
-}
+type selectPartType = "user" | "upload" | "download" | "pin";
+const selectionChoose = ref<selectPartType>("user");
+const chooseSelection = (choose: selectPartType) => {
+    selectionChoose.value = choose;
+};
 
-const setSeed = () => {
-    if (seedInput.value) {
-        settingStore.user.seed = seedInput.value;
-        notyf.success("Seed 设置成功");
-    }
-}
-
-// 服务管理
-const addService = (type: 'upload' | 'download' | 'pin') => {
-    const url = newUrl.value[type];
-    if (url && !settingStore.server[type].list.includes(url)) {
-        settingStore.server[type].list.push(url);
-        newUrl.value[type] = '';
-        notyf.success("服务地址已添加");
-    }
-}
-
-const removeService = (type: 'upload' | 'download' | 'pin', index: number) => {
-    if (settingStore.server[type].list.length > 1) {
-        settingStore.server[type].list.splice(index, 1);
-        notyf.success("服务地址已移除");
-    }
-}
-
-// 文件处理
+// 导入 导出
+const fileInput = ref<HTMLInputElement | null>(null);
+const triggerFileUpload = () => {
+    fileInput.value?.click();
+};
 const exportSettings = () => {
-    const data = JSON.stringify(settingStore);
-    const blob = new Blob([data], { type: 'application/json' });
+    const data = JSON.stringify(settingStore.setting);
+    const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `crust-settings-${now()}.json`;
+    a.download = `crust-settings.json`;
     a.click();
     URL.revokeObjectURL(url);
-    notyf.success("设置导出成功");
-}
+};
 
 const importSettings = async (event: Event) => {
     const input = event.target as HTMLInputElement;
@@ -70,132 +40,196 @@ const importSettings = async (event: Event) => {
 
     try {
         const reader = new FileReader();
+        reader.readAsText(file);
         reader.onload = (e) => {
             const data = JSON.parse(e.target?.result as string);
-            settingStore.$patch(data);
-            props.updateContent();
-            notyf.success("设置导入成功");
+            settingStore.updateSetting(data);
+            props.updateCurrentStorageItem();
         };
-        reader.readAsText(file);
-    } catch (error) {
-        notyf.error("文件格式不正确");
+    } catch (error) { }
+    input.value = "";
+};
+
+// 用户界面
+const userSeed = ref<string>(settingStore.setting.user.seed);
+const userToken = ref<string>(settingStore.setting.user.token);
+const saveUser = (type: string) => {
+    if (type === "seed") {
+        settingStore.setting.user.seed = userSeed.value;
+    } else if (type === "token") {
+        settingStore.setting.user.token = userToken.value;
     }
-    input.value = '';
-}
+};
+
+// 上传设置
+const uploadUse = ref<string>(settingStore.setting.server.upload.use);
+const uploadServerAdd = ref<string>("");
+const addUploadServer = () => {
+    settingStore.setting.server.upload.list.push(uploadServerAdd.value);
+    uploadServerAdd.value = "";
+};
+const deleteUploadServer = (hostname: string) => {
+    const index = settingStore.setting.server.upload.list.indexOf(hostname);
+    settingStore.setting.server.upload.list.splice(index, 1);
+};
+
+// 下载设置
+const downloadUse = ref<string>(settingStore.setting.server.download.use);
+const downloadServerAdd = ref<string>("");
+const addDownloadServer = () => {
+    settingStore.setting.server.download.list.push(downloadServerAdd.value);
+    downloadServerAdd.value = "";
+};
+const deleteDownloadServer = (hostname: string) => {
+    const index = settingStore.setting.server.download.list.indexOf(hostname);
+    settingStore.setting.server.download.list.splice(index, 1);
+};
+
+// 固定设置
+const pinUse = ref<string>(settingStore.setting.server.pin.use);
+const pinServerAdd = ref<string>("");
+const addPinServer = () => {
+    settingStore.setting.server.pin.list.push(pinServerAdd.value);
+    pinServerAdd.value = "";
+};
+const deletePinServer = (hostname: string) => {
+    const index = settingStore.setting.server.pin.list.indexOf(hostname);
+    settingStore.setting.server.pin.list.splice(index, 1);
+};
+
+const chooseServerUse = (type: selectPartType, host: string) => {
+    switch (type) {
+        case "download":
+            downloadUse.value = host;
+            settingStore.setting.server.download.use = host;
+            break;
+        case "upload":
+            uploadUse.value = host;
+            settingStore.setting.server.upload.use = host;
+            break;
+        case "pin":
+            pinUse.value = host;
+            settingStore.setting.server.pin.use = host;
+            break;
+    }
+};
 </script>
 
 <template>
-    <div class="settings-container">
-        <!-- 基础设置 -->
-        <div class="base-setting">
-            <h3 class="section-title">配置管理</h3>
-            <div class="action-card">
-                <label class="action-btn import-btn">
-                    <input type="file" accept=".json" @change="importSettings" hidden>
-                    <BiImport class="icon" />
-                    <span>导入设置</span>
-                </label>
-                <button class="action-btn" @click="exportSettings">
-                    <BiExport class="icon" />
-                    <span>导出设置</span>
+    <div class="settingContainer">
+        <div class="chooseSelection">
+            <div class="leftSelection">
+                <button class="chooseSelectionBtn" :class="{
+                    chooseSelectionBtnActive: selectionChoose === 'user',
+                }" @click="chooseSelection('user')">
+                    用户
+                </button>
+                <button class="chooseSelectionBtn" :class="{
+                    chooseSelectionBtnActive: selectionChoose === 'upload',
+                }" @click="chooseSelection('upload')">
+                    上传
+                </button>
+                <button class="chooseSelectionBtn" :class="{
+                    chooseSelectionBtnActive:
+                        selectionChoose === 'download',
+                }" @click="chooseSelection('download')">
+                    下载
+                </button>
+                <button class="chooseSelectionBtn" :class="{
+                    chooseSelectionBtnActive: selectionChoose === 'pin',
+                }" @click="chooseSelection('pin')">
+                    固定
+                </button>
+            </div>
+            <div class="rightSelection">
+                <button class="chooseSelectionBtn" @click="triggerFileUpload()">
+                    导入
+                    <input ref="fileInput" type="file" accept=".json" @change="importSettings" hidden />
+                </button>
+                <button class="chooseSelectionBtn" @click="exportSettings()">
+                    导出
                 </button>
             </div>
         </div>
-
-        <!-- 用户设置 -->
-        <div class="user-setting">
-            <h3 class="section-title">用户凭证</h3>
-            <div class="user-card">
-                <div class="input-group">
-                    <input v-model="tokenInput" type="text" placeholder="输入访问令牌">
-                    <button class="confirm-btn" @click="setToken">
-                        <span>保存</span>
-                    </button>
+        <div class="chooseSelectionShow">
+            <div class="showSelection" v-show="selectionChoose === 'user'">
+                <div class="userInfo">
+                    <label for="userSeedInput">种子</label>
+                    <input type="text" id="userSeedInput" v-model="userSeed" />
+                    <button @click="saveUser('seed')">保存</button>
                 </div>
-                <div class="input-group">
-                    <input v-model="seedInput" type="text" placeholder="输入种子短语">
-                    <button class="confirm-btn" @click="setSeed">
-                        <span>保存</span>
-                    </button>
+                <div class="userInfo">
+                    <label for="userTokenInput">令牌</label>
+                    <input type="text" id="userTokenInput" v-model="userToken" />
+                    <button @click="saveUser('token')">保存</button>
                 </div>
             </div>
-        </div>
-
-        <!-- 服务器设置 -->
-        <div class="server-setting">
-            <h3 class="section-title">服务管理</h3>
-
-            <!-- 上传服务 -->
-            <div class="server-card">
-                <div class="server-header">
-                    <h4>上传服务</h4>
-                    <span class="current-badge">当前使用: {{ settingStore.server.upload.use }}</span>
-                </div>
-                <select v-model="settingStore.server.upload.use" class="server-select">
-                    <option v-for="(url, index) in settingStore.server.upload.list" :key="index" :value="url">
-                        {{ url }}
-                    </option>
-                </select>
-                <div class="url-management">
-                    <div v-for="(url, index) in settingStore.server.upload.list" :key="url" class="url-item">
-                        <span>{{ url }}</span>
-                        <BiTrash class="delete-icon" @click="removeService('upload', index)" />
-                    </div>
-                    <div class="add-url">
-                        <input v-model="newUrl.upload" placeholder="添加新服务地址">
-                        <button @click="addService('upload')">
-                            添加
+            <div class="showSelection" v-show="selectionChoose === 'upload'">
+                <div class="serverUse">当先使用: {{ uploadUse }}</div>
+                <div class="serverAdd">
+                    <div class="severHost">添加服务</div>
+                    <input type="text" class="serverAddInput" v-model="uploadServerAdd" />
+                    <div class="acctions">
+                        <button class="serverAddBtn" @click="addUploadServer()">
+                            <AiOutlinePlus />
                         </button>
                     </div>
                 </div>
-            </div>
-
-            <!-- 下载服务 -->
-            <div class="server-card">
-                <div class="server-header">
-                    <h4>下载服务</h4>
-                    <span class="current-badge">当前使用: {{ settingStore.server.download.use }}</span>
-                </div>
-                <select v-model="settingStore.server.download.use" class="server-select">
-                    <option v-for="(url, index) in settingStore.server.download.list" :key="index" :value="url">
-                        {{ url }}
-                    </option>
-                </select>
-                <div class="url-management">
-                    <div v-for="(url, index) in settingStore.server.download.list" :key="url" class="url-item">
-                        <span>{{ url }}</span>
-                        <BiTrash class="delete-icon" @click="removeService('download', index)" />
-                    </div>
-                    <div class="add-url">
-                        <input v-model="newUrl.download" placeholder="添加新服务地址">
-                        <button @click="addService('download')">
-                            添加
-                        </button>
+                <div class="serverList">
+                    <div class="serverItem" :class="{ serverItemActive: server === uploadUse }" v-for="server in settingStore.setting.server.upload
+                        .list" @click="chooseServerUse('upload', server)">
+                        <div class="severHost">{{ server }}</div>
+                        <div class="acctions">
+                            <button class="serverDeleteBtn" @click.stop="deleteUploadServer(server)">
+                                <AiOutlineDelete />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-
-            <!-- Pin 服务 -->
-            <div class="server-card">
-                <div class="server-header">
-                    <h4>Pin 服务</h4>
-                    <span class="current-badge">当前使用: {{ settingStore.server.pin.use }}</span>
-                </div>
-                <select v-model="settingStore.server.pin.use" class="server-select">
-                    <option v-for="(url, index) in settingStore.server.pin.list" :key="index" :value="url">
-                        {{ url }}
-                    </option>
-                </select>
-                <div class="url-management">
-                    <div v-for="(url, index) in settingStore.server.pin.list" :key="url" class="url-item">
-                        <span>{{ url }}</span>
-                        <BiTrash class="delete-icon" @click="removeService('pin', index)" />
-                    </div>
-                    <div class="add-url">
-                        <input v-model="newUrl.pin" placeholder="添加新服务地址">
-                        <button @click="addService('pin')">
-                            添加
+            <div class="showSelection" v-show="selectionChoose === 'download'">
+                <div class="serverUse">当先使用: {{ downloadUse }}</div>
+                <div class="serverAdd">
+                    <div class="severHost">添加服务</div>
+                    <input type="text" class="serverAddInput" v-model="downloadServerAdd" />
+                    <div class="acctions">
+                        <button class="serverAddBtn" @click="addDownloadServer()">
+                            <AiOutlinePlus />
                         </button>
+                    </div>
+                </div>
+                <div class="serverList">
+                    <div class="serverItem" :class="{ serverItemActive: server === downloadUse }" v-for="server in settingStore.setting.server.download
+                        .list" @click="chooseServerUse('download', server)">
+                        <div class="severHost">{{ server }}</div>
+                        <div class="acctions">
+                            <button class="serverDeleteBtn" @click="deleteDownloadServer(server)">
+                                <AiOutlineDelete />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="showSelection" v-show="selectionChoose === 'pin'">
+                <div class="serverUse">当先使用: {{ pinUse }}</div>
+                <div class="serverAdd">
+                    <div class="severHost">添加服务</div>
+                    <input type="text" class="serverAddInput" v-model="pinServerAdd" />
+                    <div class="acctions">
+                        <button class="serverAddBtn" @click="addPinServer()">
+                            <AiOutlinePlus />
+                        </button>
+                    </div>
+                </div>
+                <div class="serverList">
+                    <div class="serverItem" :class="{ serverItemActive: server === pinUse }"
+                        v-for="server in settingStore.setting.server.pin.list" @click="chooseServerUse('pin', server)">
+                        <div class="severHost">{{ server }}</div>
+                        <div class="acctions">
+                            <button class="serverDeleteBtn" @click="deletePinServer(server)">
+                                <AiOutlineDelete />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -204,209 +238,228 @@ const importSettings = async (event: Event) => {
 </template>
 
 <style scoped>
-.settings-container {
-    padding: 0 2rem;
-    height: 100%;
-    overflow-y: auto;
+.settingContainer {
+    width: 80%;
+    height: 80%;
+    margin: 0;
+    padding: 0;
     background: #1a202c;
     color: #e5e7eb;
-    display: grid;
+    border-radius: 10px;
+    overflow: auto;
 }
 
-.section-title {
-    color: #63b3ed;
-    margin-bottom: 1.5rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid #2d3748;
-}
-
-/* 基础设置 */
-.action-card {
+.chooseSelection {
+    position: sticky;
+    top: 0;
     display: flex;
-    gap: 1rem;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
 }
 
-.action-btn {
-    background: #2d3748;
-    border: 1px solid #4a5568;
-    padding: 1rem 1.5rem;
-    border-radius: 8px;
-    color: #e5e7eb;
+.leftSelection,
+.rightSelection {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #1f2335;
+    padding: 10px;
+    border-radius: 50px;
+    gap: 10px;
+}
+
+.chooseSelectionBtn {
+    border-radius: 50px;
+    text-align: center;
+    padding: 5px 20px;
+    border: none;
     cursor: pointer;
+    background-color: #1f2335;
+    color: #414868;
+    transition: all 0.5s ease;
+}
+
+.chooseSelectionBtn:hover {
+    background-color: #737aa2;
+    transform: scale(1.01);
+    color: white;
+}
+
+.chooseSelectionBtnActive {
+    color: white;
+    background-color: #737aa2;
+}
+
+.functionBtn svg {
+    width: 50px;
+    height: 50px;
+}
+
+
+.showSelection {
+    padding: 20px;
+}
+
+/* 基础容器样式 */
+.showSelection {
+    padding: 20px;
+}
+
+/* 用户信息部分 */
+.userInfo {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    transition: all 0.2s;
-
-    &:hover {
-        background: rgba(99, 179, 237, 0.1);
-        border-color: #63b3ed;
-    }
+    margin-bottom: 15px;
 }
 
-.import-btn {
-    position: relative;
+.userInfo label {
+    width: 80px;
+    font-weight: 500;
+    color: white;
+}
+
+.userInfo input {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    margin-right: 10px;
+    transition: border-color 0.3s;
+
+    color: white;
+    background-color: #737aa2;
+}
+
+.userInfo input:focus {
+    border-color: #4299e1;
+    outline: none;
+}
+
+.userInfo button {
+    padding: 8px 16px;
+    background-color: #4299e1;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.userInfo button:hover {
+    background-color: #3182ce;
+}
+
+/* 服务器使用提示 */
+.serverUse {
+    position: sticky;
+    top: 80px;
+    font-size: 15px;
+    border-radius: 50px;
+    padding: 10px;
+    margin-bottom: 20px;
+    background-color: #737aa2;
+}
+
+/* 服务器添加区域 */
+.serverAdd {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    color: #c0caf5;
+}
+
+.severHost {
+    width: 100px;
+    font-weight: 500;
+}
+
+.serverAddInput {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 10px;
+    margin-right: 10px;
+    background-color: #737aa2;
+}
+
+.serverAddBtn {
+    padding: 8px;
+    background-color: #48bb78;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.serverAddBtn:hover {
+    background-color: #38a169;
+}
+
+/* 服务器列表 */
+.serverList {
+    border: 1px solid #a9b1d6;
+    border-radius: 4px;
     overflow: hidden;
 }
 
-/* 用户设置 */
-.user-card {
-    background: #2d3748;
-    padding: 1.5rem;
-    border-radius: 8px;
-    display: grid;
-    gap: 1rem;
-}
-
-.input-group {
-    display: flex;
-    gap: 0.5rem;
-    align-items: stretch;
-    height: 40px;
-    /* 统一高度 */
-
-    input {
-        flex: 1;
-        background: #1a202c;
-        border: 1px solid #4a5568;
-        padding: 0 1rem;
-        /* 调整内边距 */
-        border-radius: 6px;
-        color: inherit;
-        height: 100%;
-        /* 填满父容器 */
-        line-height: 1.5;
-        box-sizing: border-box;
-        /* 新增 */
-    }
-
-    .confirm-btn {
-        background: #2d3748;
-        border: 1px solid #4a5568;
-        padding: 0 1.5rem;
-        /* 调整内边距 */
-        border-radius: 6px;
-        color: #e5e7eb;
-        cursor: pointer;
-        height: 100%;
-        /* 填满父容器 */
-        display: flex;
-        align-items: center;
-        transition: all 0.2s;
-        box-sizing: border-box;
-        /* 新增 */
-    }
-}
-
-/* 服务设置 */
-.server-card {
-    background: #2d3748;
-    padding: 1.5rem;
-    border-radius: 8px;
-    margin-bottom: 1.5rem;
-}
-
-.server-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
-.current-badge {
-    background: rgba(99, 179, 237, 0.15);
-    color: #63b3ed;
-    padding: 0.25rem 0.75rem;
-    border-radius: 4px;
-    font-size: 0.9rem;
-}
-
-/* 服务器选择框 */
-.server-select {
-    width: 100%;
-    background: #1a202c;
-    border: 1px solid #4a5568;
-    padding: 0.75rem;
-    border-radius: 6px;
-    color: inherit;
-    margin-bottom: 1rem;
-    height: 40px;
-    /* 统一高度 */
-    box-sizing: border-box;
-    /* 新增 */
-}
-
-.url-management {
-    display: grid;
-    gap: 0.5rem;
-}
-
-.url-item {
+.serverItem {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    background: #1a202c;
-    padding: 0;
-    border-radius: 4px;
-
-    span {
-        margin-left: 10px;
-        font-size: 15px;
-    }
-
-    .delete-icon {
-        color: #fc8181;
-        cursor: pointer;
-        padding: 0.25rem;
-        transition: color 0.2s;
-
-        &:hover {
-            color: #f56565;
-        }
-    }
+    padding: 12px 15px;
+    border-bottom: 1px solid #a9b1d6;
+    transition: background-color 0.3s;
+    cursor: pointer;
+    background-color: #1f2335;
 }
 
-/* 添加服务地址 */
-.add-url {
+.serverItem:last-child {
+    border-bottom: none;
+}
+
+.serverItem:hover {
+    background-color: #414868;
+}
+
+.serverItemActive {
+    background-color: #414868;
+}
+
+.serverItem .severHost {
+    flex: 1;
+    color: #c0caf5;
+}
+
+.actions {
     display: flex;
-    gap: 0.5rem;
-    margin-top: 1rem;
-    align-items: stretch;
-    height: 40px;
-    /* 统一高度 */
-
-    input {
-        flex: 1;
-        background: #1a202c;
-        border: 1px solid #4a5568;
-        padding: 0 1rem;
-        border-radius: 6px;
-        color: inherit;
-        height: 100%;
-        /* 填满父容器 */
-        box-sizing: border-box;
-        /* 新增 */
-    }
-
-    button {
-        background: #2d3748;
-        border: 1px solid #4a5568;
-        padding: 0 1.5rem;
-        /* 调整内边距 */
-        border-radius: 6px;
-        color: #e5e7eb;
-        cursor: pointer;
-        height: 100%;
-        /* 填满父容器 */
-        display: flex;
-        align-items: center;
-        transition: all 0.2s;
-        box-sizing: border-box;
-        /* 新增 */
-    }
+    gap: 8px;
 }
 
-.icon {
-    font-size: 1.2rem;
+.serverDeleteBtn {
+    padding: 6px;
+    background-color: #f56565;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.serverDeleteBtn:hover {
+    background-color: #e53e3e;
+}
+
+/* 图标大小调整 */
+.serverAddBtn svg,
+.serverDeleteBtn svg {
+    width: 16px;
+    height: 16px;
 }
 </style>

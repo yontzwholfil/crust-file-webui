@@ -9,7 +9,7 @@
 
 <style scoped>
 .appContainer {
-    height: 100vh;
-    width: 100vw;
+    height: 100%;
+    width: 100%;
 }
 </style>

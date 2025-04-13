@@ -1,46 +1,58 @@
 <script lang="ts" setup>
-import { computed } from 'vue';
-import type { FileItem } from '@/type/storage';
-import { downloadFile, getFullPath } from '@/util';
-import { useSettingStore } from '@/util/pinia';
-import { AiOutlineDownload, AiOutlineClose } from 'vue-icons-plus/ai';
+import { computed } from "vue";
+import { downloadFile, getFullPath } from "@/util";
+import { AiOutlineDownload, AiOutlineClose } from "vue-icons-plus/ai";
+import { useSettingStore } from "@/store/setting";
+
 
 const settingStore = useSettingStore();
+
+type functionType =
+    | "upload"
+    | "delete"
+    | "download"
+    | "move"
+    | "setting"
+    | null;
 const props = defineProps<{
     selectedItems: string[];
-    closePanel: () => void;
+    activeFunction: (choose: functionType) => void;
 }>();
 
 // 获取选中文件的完整路径和文件信息
 const selectedFiles = computed(() => {
-    return props.selectedItems.map(filename => {
+    return props.selectedItems.map((filename) => {
         const basePath = window.location.pathname;
         const fullPath = getFullPath(basePath, filename);
-        const item = settingStore.getContentItem(fullPath);
+        const item = settingStore.getStorageItem(fullPath);
         return {
             filename,
             fullPath,
             item,
-            isFile: item?.type === 'file'
+            isFile: item?.type === "file",
         };
     });
 });
 
 // 检查是否包含文件夹
 const containsFolders = computed(() =>
-    selectedFiles.value.some(file => !file.isFile)
+    selectedFiles.value.some((file) => !file.isFile),
 );
 
 // 下载文件
 const downloadSelected = () => {
-    selectedFiles.value.forEach(file => {
+    selectedFiles.value.forEach((file) => {
         if (file.isFile && file.item) {
-            const fileItem = file.item as FileItem;
+            const fileItem = file.item;
+            if (fileItem.type === "folder") return;
             // 调用您的下载函数，这里假设 downloadFile 已全局可用
-            downloadFile(`${settingStore.server.download.use}/ipfs/${fileItem.cid}`, fileItem.name);
+            downloadFile(
+                `${settingStore.setting.server.download.use}/ipfs/${fileItem.cid}`,
+                fileItem.name,
+            );
         }
     });
-    props.closePanel();
+    props.activeFunction(null);
 };
 </script>
 
@@ -48,13 +60,16 @@ const downloadSelected = () => {
     <div class="download-confirm-container">
         <div class="confirm-header">
             <h3>下载确认</h3>
-            <button class="close-btn" @click="closePanel">
+            <button class="close-btn" @click="activeFunction(null)">
                 <AiOutlineClose />
             </button>
         </div>
 
         <div class="confirm-content">
-            <p>将要下载以下 {{selectedFiles.filter(f => f.isFile).length}} 个文件：</p>
+            <p>
+                将要下载以下
+                {{selectedFiles.filter((f) => f.isFile).length}} 个文件：
+            </p>
 
             <ul class="file-list">
                 <li v-for="file in selectedFiles" :key="file.fullPath" class="file-item">
@@ -69,7 +84,9 @@ const downloadSelected = () => {
         </div>
 
         <div class="confirm-actions">
-            <button class="cancel-btn" @click="closePanel">取消</button>
+            <button class="cancel-btn" @click="activeFunction(null)">
+                取消
+            </button>
             <button class="confirm-btn" @click="downloadSelected">
                 <AiOutlineDownload />
                 <span>确认下载</span>
@@ -84,7 +101,7 @@ const downloadSelected = () => {
     border-radius: 8px;
     padding: 20px;
     color: #e5e7eb;
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: "Segoe UI", system-ui, sans-serif;
 }
 
 .confirm-header {

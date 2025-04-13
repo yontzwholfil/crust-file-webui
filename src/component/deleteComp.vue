@@ -1,11 +1,18 @@
 <script lang="ts" setup>
+import { useSettingStore } from '@/store/setting';
 import { getFullPath } from '@/util';
-import { useSettingStore } from '@/util/pinia';
 
 const settingStore = useSettingStore();
+type functionType =
+    | "upload"
+    | "delete"
+    | "download"
+    | "move"
+    | "setting"
+    | null;
 const props = defineProps<{
     selectedItems: string[];
-    closePanel: () => void;
+    activeFunction: (choose: functionType) => void;
 }>();
 
 const deleteItems = () => {
@@ -14,9 +21,9 @@ const deleteItems = () => {
     for (let index = 0; index < length; index++) {
         const element = props.selectedItems[index];
         const fullPath = getFullPath(basePath, element);
-        settingStore.delContentItem(fullPath);
+        settingStore.delStorageItem(fullPath);
     }
-    props.closePanel();
+    props.activeFunction(null);
 }
 
 </script>
@@ -29,7 +36,7 @@ const deleteItems = () => {
             <li v-for="item in selectedItems" :key="item">{{ item }}</li>
         </ul>
         <div class="action-buttons">
-            <button @click="closePanel()">取消</button>
+            <button @click="activeFunction(null)">取消</button>
             <button class="danger" @click="deleteItems">永久删除</button>
         </div>
     </div>
