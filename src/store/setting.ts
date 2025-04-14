@@ -57,6 +57,27 @@ export const useSettingStore = defineStore(
       setting.value = newSetting;
     }
 
+    function updateFileItemRequestId(fullPath: string, requestId: string) {
+      const pathItemList = fullPath
+        .split("/")
+        .filter((pathItem) => pathItem !== "");
+      let current = setting.value.storage;
+      if (pathItemList.length === 0) return current;
+      for (let index = 0; index < pathItemList.length - 1; index++) {
+        const pathItem = pathItemList[index];
+        const child = current.children.find((child) => child.name === pathItem);
+        if (!child || child.type !== "folder") return null;
+        current = child;
+      }
+
+      const result = current.children.find(
+        (child) => child.name === pathItemList[pathItemList.length - 1],
+      );
+      if (result === undefined || result.type === "folder") return null;
+
+      result.requestId = requestId;
+    }
+
     function getStorageItem(fullPath: string): StorageItem | null {
       const pathItemList = fullPath
         .split("/")
@@ -83,7 +104,6 @@ export const useSettingStore = defineStore(
       const pathItemList = folderPath
         .split("/")
         .filter((pathItem) => pathItem !== "");
-      console.log(pathItemList)
       let current = setting.value.storage;
       if (pathItemList.length === 0) {
         current.children.push(storageItem);
@@ -229,6 +249,7 @@ export const useSettingStore = defineStore(
       moveStorageItem,
       searchStorageItemInFolder,
       searchStorageItem,
+      updateFileItemRequestId,
     };
   },
   {

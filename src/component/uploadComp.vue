@@ -3,11 +3,11 @@ import { ref, computed } from "vue";
 import { VscDebugRestart } from "vue-icons-plus/vsc";
 import { IpDeleteFive } from "vue-icons-plus/ip";
 import { postUploadContent } from "@/api/postUploadContent";
-import { postRePin } from "@/api/postRepin";
-import { formatSize, taskFromFile } from "@/util";
+import { formatSize, getFullPath, taskFromFile } from "@/util";
 import { useTaskStore } from "@/store/task";
 import type { Task } from "@/type/task";
 import { useSettingStore } from "@/store/setting";
+import { postPin } from "@/api/postPin";
 
 const selectedTab = ref<"transfer" | "success" | "failed">("transfer");
 const showPinTasks = ref(false);
@@ -45,9 +45,14 @@ const handleFileUpload = (event: Event) => {
     const path = document.location.pathname;
     if (files) {
         for (const file of files) {
+            const fullPath = getFullPath(path, file.webkitRelativePath);
+            const storageItem = settingStore.getStorageItem(fullPath);
+            if (storageItem !== null && storageItem.type === 'file') {
+                continue
+            }
             const task: Task = taskFromFile(path, file);
             taskStore.taskMap.set(task.id, task);
-            taskStore.pool.add(() => postUploadContent(task));
+            taskStore.uploadPool.add(() => postUploadContent(task));
         }
     }
     input.value = ""; // Clear input for same file selection
@@ -59,12 +64,17 @@ const handleFolderUpload = (event: Event) => {
     const path = document.location.pathname;
     if (files) {
         for (const file of files) {
+            const fullPath = getFullPath(path, file.webkitRelativePath);
+            const storageItem = settingStore.getStorageItem(fullPath);
+            if (storageItem !== null && storageItem.type === 'file') {
+                continue
+            }
             const task: Task = taskFromFile(path, file);
             taskStore.taskMap.set(task.id, task);
-            taskStore.pool.add(() => postUploadContent(task));
+            taskStore.uploadPool.add(() => postUploadContent(task));
         }
     }
-    input.value = ""; // Clear input for same folder selection
+    input.value = "";
 };
 
 const selectedTasks = ref<string[]>([]);
@@ -74,13 +84,13 @@ const selectAllTask = () => {
     if (selectLength === totalLength) {
         selectedTasks.value = [];
     } else {
-        selectedTasks.value = taskStore.failedTaskList.map((item) => item.name);
+        selectedTasks.value = taskStore.failedTaskList.map((item) => item.id);
     }
 };
-const selectTaskItem = (taskName: string) => {
-    const index = selectedTasks.value.indexOf(taskName);
+const selectTaskItem = (taskId: string) => {
+    const index = selectedTasks.value.indexOf(taskId);
     if (index === -1) {
-        selectedTasks.value.push(taskName);
+        selectedTasks.value.push(taskId);
     } else {
         selectedTasks.value.splice(index, 1);
     }
@@ -95,7 +105,7 @@ const retrySelectedTasks = async () => {
             );
             taskStore.taskMap.set(taskId, task);
             if (task.upload.status === "success") {
-                await postRePin(task);
+                taskStore.pinPool.add(() => postPin(task));
             } else {
                 task.upload = {
                     status: "wait",
@@ -106,7 +116,7 @@ const retrySelectedTasks = async () => {
                     status: "wait",
                     response: null,
                 };
-                taskStore.pool.add(() => postUploadContent(task));
+                taskStore.uploadPool.add(() => postUploadContent(task));
             }
         }
     }
@@ -121,7 +131,7 @@ const retryTasks = async (taskId: string) => {
         );
         taskStore.taskMap.set(taskId, task);
         if (task.upload.status === "success") {
-            await postRePin(task);
+            taskStore.pinPool.add(() => postPin(task));
         } else {
             task.upload = {
                 status: "wait",
@@ -132,7 +142,7 @@ const retryTasks = async (taskId: string) => {
                 status: "wait",
                 response: null,
             };
-            taskStore.pool.add(() => postUploadContent(task));
+            taskStore.uploadPool.add(() => postUploadContent(task));
         }
     }
 };
@@ -223,11 +233,11 @@ const showStatus = (task: Task): string => {
                     <transition name="fade">
                         <div v-show="showUploadOptions" class="upload-options">
                             <button @click.stop="triggerFileUpload">
-                                <span>📄 文件</span>
+                                <span>文件</span>
                                 <input ref="fileInput" type="file" multiple hidden @change="handleFileUpload" />
                             </button>
                             <button @click.stop="triggerFolderUpload">
-                                <span>📁 文件夹</span>
+                                <span>文件夹</span>
                                 <input ref="folderInput" type="file" webkitdirectory hidden
                                     @change="handleFolderUpload" />
                             </button>
@@ -269,8 +279,8 @@ const showStatus = (task: Task): string => {
                 <tbody>
                     <tr v-for="task in currentTasks" :key="task.id" class="file-row">
                         <td class="checkbox-cell" v-show="selectedTab === 'failed'">
-                            <input type="checkbox" :checked="selectedTasks.includes(task.name)"
-                                v-model="selectedTasks" />
+                            <input type="checkbox" :checked="selectedTasks.includes(task.id)"
+                                @change="selectTaskItem(task.id)" />
                         </td>
                         <td class="name-cell">
                             <span class="filename">{{ task.name }}</span>
@@ -283,9 +293,7 @@ const showStatus = (task: Task): string => {
                                         width: task.upload.progress + '%',
                                     }"></div>
                                 </div>
-                                <span class="progress-text">{{
-                                    task.upload.progress
-                                    }}%</span>
+                                <span class="progress-text">{{ task.upload.progress }}%</span>
                             </div>
                         </td>
                         <td class="action-cell" v-show="selectedTab === 'failed'">

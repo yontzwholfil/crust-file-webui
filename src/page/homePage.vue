@@ -223,7 +223,7 @@ watch(
                             </div>
                         </td>
                         <td class="size-cell">{{ formatSize(item.size) }}</td>
-                        <td class="date-cell">{{ item.created }}</td>
+                        <td class="date-cell">{{ formatTimestamp(item.created) }}</td>
                     </tr>
                 </tbody>
             </table>

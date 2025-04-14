@@ -4,56 +4,64 @@ import { PromisePool } from "@/util/taskPool";
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
-export const useTaskStore = defineStore("task", () => {
-  const pool = ref<PromisePool>(new PromisePool());
-  const taskMap = ref<Map<string, Task>>(new Map());
-  const successTaskList = ref<Task[]>([]);
-  const failedTaskList = ref<Task[]>([]);
+export const useTaskStore = defineStore(
+  "task",
+  () => {
+    const uploadPool = ref<PromisePool>(new PromisePool());
+    const pinPool = ref<PromisePool>(new PromisePool());
+    const taskMap = ref<Map<string, Task>>(new Map());
+    const successTaskList = ref<Task[]>([]);
+    const failedTaskList = ref<Task[]>([]);
 
-  function addTask(task: Task) {
-    taskMap.value.set(task.id, task);
-  }
-  function updateUploadStatus(id: string, status: TaskStatus) {
-    const task = taskMap.value.get(id);
-    if (task) {
-      task.upload.status = status;
+    function addTask(task: Task) {
+      taskMap.value.set(task.id, task);
     }
-  }
-  function updateUploadProgress(id: string, progress: string) {
-    const task = taskMap.value.get(id);
-    if (task) {
-      task.upload.progress = progress;
+    function updateUploadStatus(id: string, status: TaskStatus) {
+      const task = taskMap.value.get(id);
+      if (task) {
+        task.upload.status = status;
+      }
     }
-  }
-  function updateUploadResponse(id: string, respronse: UploadFileResponse) {
-    const task = taskMap.value.get(id);
-    if (task) {
-      task.upload.response = respronse;
+    function updateUploadProgress(id: string, progress: string) {
+      const task = taskMap.value.get(id);
+      if (task) {
+        task.upload.progress = progress;
+      }
     }
-  }
-  function updatePinResponse(id: string, response: PinStatus) {
-    const task = taskMap.value.get(id);
-    if (task) {
-      task.pin.response = response;
+    function updateUploadResponse(id: string, respronse: UploadFileResponse) {
+      const task = taskMap.value.get(id);
+      if (task) {
+        task.upload.response = respronse;
+      }
     }
-  }
-  function updatePinStatus(id: string, status: TaskStatus) {
-    const task = taskMap.value.get(id);
-    if (task) {
-      task.pin.status = status;
+    function updatePinResponse(id: string, response: PinStatus) {
+      const task = taskMap.value.get(id);
+      if (task) {
+        task.pin.response = response;
+      }
     }
-  }
+    function updatePinStatus(id: string, status: TaskStatus) {
+      const task = taskMap.value.get(id);
+      if (task) {
+        task.pin.status = status;
+      }
+    }
 
-  return {
-    pool,
-    taskMap,
-    successTaskList,
-    failedTaskList,
-    addTask,
-    updateUploadResponse,
-    updateUploadStatus,
-    updateUploadProgress,
-    updatePinResponse,
-    updatePinStatus,
-  };
-});
+    return {
+      uploadPool,
+      pinPool,
+      taskMap,
+      successTaskList,
+      failedTaskList,
+      addTask,
+      updateUploadResponse,
+      updateUploadStatus,
+      updateUploadProgress,
+      updatePinResponse,
+      updatePinStatus,
+    };
+  },
+  {
+    persist: true,
+  },
+);

@@ -10,6 +10,7 @@ interface FileItem {
   name: string;
   size: number;
   cid: string;
+  status: "success" | "fail";
   created: number;
   requestId: string;
 }
